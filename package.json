@@ -21,7 +21,7 @@
     "preview": "qwik build preview && vite preview --open",
     "start": "vite --open --mode ssr",
     "qwik": "qwik",
-    "verify": "node verify.mjs"
+    "verify": "node verify.mjs && node verify2.mjs"
   },
   "devDependencies": {
     "@eslint/js": "latest",
