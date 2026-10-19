@@ -21,7 +21,9 @@
     "preview": "qwik build preview && vite preview --open",
     "start": "vite --open --mode ssr",
     "qwik": "qwik",
-    "verify": "node verify.mjs && node verify2.mjs"
+    "verify": "node verify.mjs && node verify2.mjs",
+    "verify:no-catch-flag": "node verify-no-catch-flag.mjs",
+    "verify:optimizer-export": "node check-optimizer-export.mjs"
   },
   "devDependencies": {
     "@eslint/js": "latest",
