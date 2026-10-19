@@ -9,7 +9,7 @@ npm install
 npm run build.client && npm run build.preview
 npx vite preview          # then open the pages below
 npm run verify            # or: run every case headless with Playwright and print the result
-                          # (verify.mjs: D, G, S; verify2.mjs: I, L, P, C, A, CSS)
+                          # (verify.mjs: D, G, S; verify2.mjs: I, L, P, C, A, CSS, K, B)
 npm run verify:no-catch-flag      # builds without the catchBoundary flag and requests /nf/
 npm run verify:optimizer-export   # createOptimizer: declared in the types, missing at runtime
 ```
@@ -27,6 +27,8 @@ npm run verify:optimizer-export   # createOptimizer: declared in the types, miss
 | [`/css/`](src/routes/css/index.tsx) | dynamic `import("./probe.css")` in a production build | the CSS is in the main stylesheet, but the import asks for a JS chunk that was never written: 404, the import rejects |
 | [`/nf/`](src/routes/nf/index.tsx) + `npm run verify:no-catch-flag` | `<Catch>` used without `experimental: ["catchBoundary"]` | HTTP 200 with a "500 Internal Server Error" page, nothing in the server log, no build warning |
 | `npm run verify:optimizer-export` | `createOptimizer` in `@qwik.dev/core/optimizer` | declared in `optimizer.d.ts`, not exported by `optimizer.mjs` |
+| [`/k/`](src/routes/k) | a client navigation to `/k/area/page/`, inside the pathless group `(grp)`, while `/k/[x]/` exists | the group layout's loader is fetched at `/k/area/q-loader-….json`, which `/k/[x]/` matches: 404 "Loader not found", empty page. As a document it works |
+| [`/bf/`](src/routes/bf/index.tsx) | Back pressed right after a same-page navigation (`nav("?q=…")`) changed the URL | the router finishes its navigation with `replaceState(?q=…)` on top of the entry Back returned to: URL, field and list stay filtered |
 
 `npm run verify` output on 2.0.0-rc.3:
 
@@ -61,6 +63,13 @@ C (Pending inside a component$, reader through its Slot), every 200 ms after the
 A via action that redirects to /a/target/ (onGet-only, redirects to /a/final/): {"path":"/a/target/","title":null,"bodyText":""}
 A via <Link> to /a/target/ (onGet-only, redirects to /a/final/): {"path":"/a/target/","title":null,"bodyText":""}
 CSS dynamic import(): {"state":"import failed: TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4321/build/q-BvRk9kiK.js","color":"rgb(1, 2, 3)"} failed requests: 404 /build/q-BvRk9kiK.js/
+K client navigation /k/ -> /k/area/page/: {"path":"/k/area/page/","title":null,"user":"group user: "}
+  q-loader: 404 /k/area/q-loader-GSlisHtew2I.w5ltof.json {"error":"Loader not found"}
+  pageerror: Loader GSlisHtew2I returned empty response
+K document GET /k/area/page/: 200, group user rendered: true
+B Back 0 ms after the filter URL changed: wrong state 13/20
+  last history calls: pushState /bf/?q=Bianchi | --- Back | popstate /bf/ | replaceState /bf/?q=Bianchi | replaceState /bf/?q=Bianchi
+B Back 300 ms after the filter URL changed: wrong state 0/20
 ```
 
 `npm run verify:no-catch-flag` and `npm run verify:optimizer-export` on 2.0.0-rc.3:
