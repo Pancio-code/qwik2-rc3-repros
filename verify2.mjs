@@ -1,4 +1,4 @@
-// Second batch of reproductions (I, L, P, C, A, CSS) against the production build (`npm run build.client &&
+// Second batch of reproductions (I, L, P, C, A, CSS, K, B) against the production build (`npm run build.client &&
 // npm run build.preview` first). Starts `vite preview` itself.
 import { spawn } from "node:child_process";
 import { chromium } from "@playwright/test";
@@ -129,6 +129,55 @@ if (run("CSS")) {
   const r = await p.evaluate(() => ({ state: document.querySelector("#state")?.textContent, color: getComputedStyle(document.querySelector("#title")).color }));
   console.log("CSS dynamic import():", JSON.stringify(r), "failed requests:", failed.join(", "));
   await p.close();
+}
+
+if (run("K")) {
+  const { p, log } = await page();
+  const loaders = [];
+  p.on("response", async (r) => r.url().includes("q-loader") && loaders.push(`${r.status()} ${new URL(r.url()).pathname} ${(await r.text().catch(() => "")).slice(0, 40)}`));
+  await p.goto(`${BASE}/k/`, { waitUntil: "networkidle" });
+  await p.click("#go-page");
+  await sleep(2500);
+  const r = await p.evaluate(() => ({ path: location.pathname, title: document.querySelector("#title")?.textContent ?? null, user: document.querySelector("#user")?.textContent ?? null }));
+  console.log("K client navigation /k/ -> /k/area/page/:", JSON.stringify(r));
+  console.log("  q-loader: " + loaders.join(", "));
+  console.log("  " + log.filter((l) => /pageerror/.test(l)).join("\n  "));
+  const d = await fetch(`${BASE}/k/area/page/`);
+  console.log(`K document GET /k/area/page/: ${d.status}, group user rendered: ${(await d.text()).includes('id="user"')}`);
+}
+
+if (run("B")) {
+  for (const waitMs of [0, 300]) {
+    let wrong = 0;
+    let trace = "";
+    for (let i = 0; i < 20; i++) {
+      const { p } = await page();
+      await p.addInitScript(() => {
+        window.__trace = [];
+        const rec = (what) => window.__trace.push(`${what} ${location.pathname}${location.search}`);
+        const push = history.pushState.bind(history);
+        const repl = history.replaceState.bind(history);
+        history.pushState = (...a) => (push(...a), rec("pushState"));
+        history.replaceState = (...a) => (repl(...a), rec("replaceState"));
+        addEventListener("popstate", () => rec("popstate"));
+      });
+      await p.goto(`${BASE}/bf/`, { waitUntil: "networkidle" });
+      await p.fill("#q", "Bianchi");
+      await p.click("#filter");
+      await p.waitForURL(/q=Bianchi/);
+      if (waitMs) await sleep(waitMs);
+      await p.evaluate(() => window.__trace.push("--- Back"));
+      await p.goBack();
+      await sleep(1500);
+      const r = await p.evaluate(() => ({ url: location.pathname + location.search, field: document.querySelector("#q").value, trace: window.__trace }));
+      if (r.url !== "/bf/" || r.field !== "") {
+        wrong++;
+        if (!trace) trace = r.trace.slice(-5).join(" | ");
+      }
+      await p.close();
+    }
+    console.log(`B Back ${waitMs} ms after the filter URL changed: wrong state ${wrong}/20${trace ? `\n  last history calls: ${trace}` : ""}`);
+  }
 }
 
 await browser.close();
