@@ -1,4 +1,4 @@
-// Second batch of reproductions (I, L, P) against the production build (`npm run build.client &&
+// Second batch of reproductions (I, L, P, C) against the production build (`npm run build.client &&
 // npm run build.preview` first). Starts `vite preview` itself.
 import { spawn } from "node:child_process";
 import { chromium } from "@playwright/test";
@@ -90,6 +90,21 @@ if (run("P")) {
   console.log("P samples after the click:", JSON.stringify(samples));
   console.log(`P second click went through: ${clicked}, POSTs sent: ${posts}, final path ${await p.evaluate(() => location.pathname)}`);
   await p.close();
+}
+
+if (run("C")) {
+  for (const [id, label] of [["#go-page", "stateful wrapper inside Pending"], ["#go-section", "Pending inside a component$, reader through its Slot"]]) {
+    const { p } = await page();
+    await p.goto(`${BASE}/c/`, { waitUntil: "networkidle" });
+    await p.click(id);
+    const seen = [];
+    for (let i = 0; i < 16; i++) {
+      await sleep(200);
+      seen.push(await p.evaluate(() => (!document.querySelector("#title") ? "old-page" : document.querySelector("#data") ? "data" : document.querySelector("#fallback") ? "fallback" : "page")));
+    }
+    console.log(`C (${label}), every 200 ms after the click: ${seen.join(" ")}`);
+    await p.close();
+  }
 }
 
 await browser.close();
