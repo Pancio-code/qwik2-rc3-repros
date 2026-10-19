@@ -9,7 +9,9 @@ npm install
 npm run build.client && npm run build.preview
 npx vite preview          # then open the pages below
 npm run verify            # or: run every case headless with Playwright and print the result
-                          # (verify.mjs: D, G, S; verify2.mjs: I, L, P, C)
+                          # (verify.mjs: D, G, S; verify2.mjs: I, L, P, C, A, CSS)
+npm run verify:no-catch-flag      # builds without the catchBoundary flag and requests /nf/
+npm run verify:optimizer-export   # createOptimizer: declared in the types, missing at runtime
 ```
 
 | Route | Bug | What you see |
@@ -21,6 +23,10 @@ npm run verify            # or: run every case headless with Playwright and prin
 | [`/l/from/`](src/routes/l) | a loader that throws `redirect()` during a client navigation | the page renders once with `.value` = `undefined` and throws |
 | [`/p/`](src/routes/p) | an action that throws `redirect()` | `isRunning` is `false` and the button enabled while the redirected page (1.5 s loader) is still loading |
 | [`/c/`](src/routes/c) | `<Pending>` inside a `component$`, the reading child projected through that component's `<Slot>` (QwikDev/qwik#8801) | on client navigation the old page stays until the data arrives; no fallback. A stateful wrapper inside `<Pending>` (`/c/page/`) works |
+| [`/a/`](src/routes/a) | an action `redirect()` or a `<Link>` to a route that has only `onGet` (it redirects again, no component) | blank page at `/a/target/`; the redirect to `/a/final/` is never followed |
+| [`/css/`](src/routes/css/index.tsx) | dynamic `import("./probe.css")` in a production build | the CSS is in the main stylesheet, but the import asks for a JS chunk that was never written: 404, the import rejects |
+| [`/nf/`](src/routes/nf/index.tsx) + `npm run verify:no-catch-flag` | `<Catch>` used without `experimental: ["catchBoundary"]` | HTTP 200 with a "500 Internal Server Error" page, nothing in the server log, no build warning |
+| `npm run verify:optimizer-export` | `createOptimizer` in `@qwik.dev/core/optimizer` | declared in `optimizer.d.ts`, not exported by `optimizer.mjs` |
 
 `npm run verify` output on 2.0.0-rc.3:
 
@@ -52,4 +58,20 @@ L after the click: {"url":"/l/list/?sort=new","items":"3 items, sorted by new"}
 P samples after the click: [{"at":300,"path":"/p/next/","disabled":false,"isRunning":"false"},{"at":700,"path":"/p/next/","disabled":false,"isRunning":"false"},{"at":1100,"path":"/p/next/","disabled":false,"isRunning":"false"}]
 C (stateful wrapper inside Pending), every 200 ms after the click: fallback fallback fallback fallback fallback fallback fallback data data data data data data data data data
 C (Pending inside a component$, reader through its Slot), every 200 ms after the click: old-page old-page old-page old-page old-page old-page old-page data data data data data data data data data
+A via action that redirects to /a/target/ (onGet-only, redirects to /a/final/): {"path":"/a/target/","title":null,"bodyText":""}
+A via <Link> to /a/target/ (onGet-only, redirects to /a/final/): {"path":"/a/target/","title":null,"bodyText":""}
+CSS dynamic import(): {"state":"import failed: TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4321/build/q-BvRk9kiK.js","color":"rgb(1, 2, 3)"} failed requests: 404 /build/q-BvRk9kiK.js/
+```
+
+`npm run verify:no-catch-flag` and `npm run verify:optimizer-export` on 2.0.0-rc.3:
+
+```
+build warnings about Catch/experimental: none
+GET /nf/ -> HTTP 200; body says "500 Internal Server Error": true; page content rendered: false
+server log lines during the request: none
+
+@qwik.dev/core 2.0.0-rc.3
+createOptimizer declared in node_modules/@qwik.dev/core/dist/optimizer.d.ts: true
+runtime exports of @qwik.dev/core/optimizer: qwikRolldown, qwikRollup, qwikVite
+typeof createOptimizer at runtime: undefined
 ```
