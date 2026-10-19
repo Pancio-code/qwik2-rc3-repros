@@ -22,6 +22,9 @@ export default component$(() => (
       <li>
         <a href="/p/">P: an action that redirects stops running before the new page</a>
       </li>
+      <li>
+        <a href="/c/">C: Pending inside a component$ misses a reader projected through its Slot</a>
+      </li>
     </ul>
   </main>
 ));
