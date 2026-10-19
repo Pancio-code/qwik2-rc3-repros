@@ -34,6 +34,12 @@ export default component$(() => (
       <li>
         <a href="/nf/">NF: a page with Catch (500 when built without the catchBoundary flag)</a>
       </li>
+      <li>
+        <a href="/k/">K: group layout data asked at a path a dynamic sibling route matches (404)</a>
+      </li>
+      <li>
+        <a href="/bf/">B: Back right after a same-page navigation is undone</a>
+      </li>
     </ul>
   </main>
 ));
