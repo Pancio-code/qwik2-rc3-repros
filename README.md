@@ -9,7 +9,7 @@ npm install
 npm run build.client && npm run build.preview
 npx vite preview          # then open the pages below
 npm run verify            # or: run every case headless with Playwright and print the result
-                          # (verify.mjs: D, G, S; verify2.mjs: I, L, P)
+                          # (verify.mjs: D, G, S; verify2.mjs: I, L, P, C)
 ```
 
 | Route | Bug | What you see |
@@ -20,6 +20,7 @@ npm run verify            # or: run every case headless with Playwright and prin
 | [`/i/`](src/routes/i/index.tsx) | the first SSR waits for every `blockSSR: false` loader, even one no component reads | the 100 ms loader's content reaches the browser after ~1.5 s, when the unread 1.5 s loader ends |
 | [`/l/from/`](src/routes/l) | a loader that throws `redirect()` during a client navigation | the page renders once with `.value` = `undefined` and throws |
 | [`/p/`](src/routes/p) | an action that throws `redirect()` | `isRunning` is `false` and the button enabled while the redirected page (1.5 s loader) is still loading |
+| [`/c/`](src/routes/c) | `<Pending>` inside a `component$`, the reading child projected through that component's `<Slot>` (QwikDev/qwik#8801) | on client navigation the old page stays until the data arrives; no fallback. A stateful wrapper inside `<Pending>` (`/c/page/`) works |
 
 `npm run verify` output on 2.0.0-rc.3:
 
@@ -49,4 +50,6 @@ L after the click: {"url":"/l/list/?sort=new","items":"3 items, sorted by new"}
   log: List render, value: {"sort":"new","items":["a","b","c"]}
   pageerror: Cannot read properties of undefined (reading 'items')
 P samples after the click: [{"at":300,"path":"/p/next/","disabled":false,"isRunning":"false"},{"at":700,"path":"/p/next/","disabled":false,"isRunning":"false"},{"at":1100,"path":"/p/next/","disabled":false,"isRunning":"false"}]
+C (stateful wrapper inside Pending), every 200 ms after the click: fallback fallback fallback fallback fallback fallback fallback data data data data data data data data data
+C (Pending inside a component$, reader through its Slot), every 200 ms after the click: old-page old-page old-page old-page old-page old-page old-page data data data data data data data data data
 ```
