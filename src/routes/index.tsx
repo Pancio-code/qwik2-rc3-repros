@@ -13,6 +13,15 @@ export default component$(() => (
       <li>
         <a href="/s/">S: router actions (failed request, double click, array onSubmit$)</a>
       </li>
+      <li>
+        <a href="/i/">I: SSR waits for background loaders</a>
+      </li>
+      <li>
+        <a href="/l/from/">L: a loader that redirects leaves its value undefined</a>
+      </li>
+      <li>
+        <a href="/p/">P: an action that redirects stops running before the new page</a>
+      </li>
     </ul>
   </main>
 ));
