@@ -1,4 +1,4 @@
-// Second batch of reproductions (I, L, P, C) against the production build (`npm run build.client &&
+// Second batch of reproductions (I, L, P, C, A, CSS) against the production build (`npm run build.client &&
 // npm run build.preview` first). Starts `vite preview` itself.
 import { spawn } from "node:child_process";
 import { chromium } from "@playwright/test";
@@ -105,6 +105,30 @@ if (run("C")) {
     console.log(`C (${label}), every 200 ms after the click: ${seen.join(" ")}`);
     await p.close();
   }
+}
+
+if (run("A")) {
+  for (const [id, how] of [["#submit", "action that redirects"], ["#link", "<Link>"]]) {
+    const { p, log } = await page();
+    await p.goto(`${BASE}/a/`, { waitUntil: "networkidle" });
+    await p.click(id);
+    await sleep(2500);
+    const r = await p.evaluate(() => ({ path: location.pathname, title: document.querySelector("#title")?.textContent ?? null, bodyText: document.body.innerText.trim().slice(0, 60) }));
+    console.log(`A via ${how} to /a/target/ (onGet-only, redirects to /a/final/):`, JSON.stringify(r));
+    if (log.length) console.log("  " + log.join("\n  "));
+    await p.close();
+  }
+}
+
+if (run("CSS")) {
+  const { p, log } = await page();
+  const failed = [];
+  p.on("response", (r) => r.status() >= 400 && failed.push(`${r.status()} ${new URL(r.url()).pathname}`));
+  await p.goto(`${BASE}/css/`, { waitUntil: "networkidle" });
+  await sleep(1500);
+  const r = await p.evaluate(() => ({ state: document.querySelector("#state")?.textContent, color: getComputedStyle(document.querySelector("#title")).color }));
+  console.log("CSS dynamic import():", JSON.stringify(r), "failed requests:", failed.join(", "));
+  await p.close();
 }
 
 await browser.close();
