@@ -12,6 +12,8 @@ npm run verify            # or: run every case headless with Playwright and prin
                           # (verify.mjs: D, G, S; verify2.mjs: I, L, P, C, A, CSS, K, B)
 npm run verify:no-catch-flag      # builds without the catchBoundary flag and requests /nf/
 npm run verify:optimizer-export   # createOptimizer: declared in the types, missing at runtime
+node verify3.mjs                  # out-of-order streaming: Q24, Q24b, Q24c, Q24e, Q24f against the build
+DEV=1 node verify3.mjs            # the same against `vite --mode ssr` (Q24c and Q24e only fail there)
 ```
 
 | Route | Bug | What you see |
@@ -29,6 +31,11 @@ npm run verify:optimizer-export   # createOptimizer: declared in the types, miss
 | `npm run verify:optimizer-export` | `createOptimizer` in `@qwik.dev/core/optimizer` | declared in `optimizer.d.ts`, not exported by `optimizer.mjs` |
 | [`/k/`](src/routes/k) | a client navigation to `/k/area/page/`, inside the pathless group `(grp)`, while `/k/[x]/` exists | the group layout's loader is fetched at `/k/area/q-loader-….json`, which `/k/[x]/` matches: 404 "Loader not found", empty page. As a document it works |
 | [`/bf/`](src/routes/bf/index.tsx) | Back pressed right after a same-page navigation (`nav("?q=…")`) changed the URL | the router finishes its navigation with `replaceState(?q=…)` on top of the entry Back returned to: URL, field and list stay filtered |
+| [`/q24/`](src/routes/q24/index.tsx) | a `<Pending>` that resolves before the shell ends adds state roots after the container state is written | the slow boundary's button does nothing after resume; `processRootRef` errors while the client applies its state patch |
+| [`/q24b/`](src/routes/q24b/index.tsx), [`/q24b/inline/`](src/routes/q24b/inline/index.tsx) | two `<Pending>` boundaries share an async signal; the second one subscribes late to a signal of the shell | `/q24b/`: `Cannot read properties of undefined (reading '0')` in `processRootRef` at the first click, the count never updates; `/q24b/inline/`: no error, the count never updates |
+| [`/q24c/`](src/routes/q24c/index.tsx) (dev only) | `.pending` of an async signal read inside an out-of-order `<Pending>` | the dev server asserts "Do not use signals across containers" and the response never finishes |
+| [`/q24e/`](src/routes/q24e/index.tsx) (dev only) | a component throws while rendering on the server, no `<Catch>` | the dev server never finishes the response and logs nothing (the build answers with an inline 500) |
+| [`/q24f/`](src/routes/q24f/index.tsx) | a computed signal first read inside a late `<Pending>` | it never updates after resume, no error |
 
 `npm run verify` output on 2.0.0-rc.3:
 
@@ -83,4 +90,26 @@ server log lines during the request: none
 createOptimizer declared in node_modules/@qwik.dev/core/dist/optimizer.d.ts: true
 runtime exports of @qwik.dev/core/optimizer: qwikRolldown, qwikRollup, qwikVite
 typeof createOptimizer at runtime: undefined
+```
+
+`node verify3.mjs` output on 2.0.0-rc.3 (`DEV=1 node verify3.mjs` gives the same for Q24, Q24b and
+Q24f; Q24c prints "the document never finished loading" and Q24e "the response never finished"):
+
+```
+Q24 HTML {"stateRoots":106,"patchStart":106,"earlySegmentRefsPastStateEnd":[106,107,109]}
+Q24 after two clicks: "slow 0" (expected "slow 2")
+  error: %cQWIK ERROR  Cannot assign to read only property '0' of string 'q-Bx6uYRQg.js' TypeError: Cannot assign to read only property '0' of string 'q-Bx6uYRQg.js'
+  error: %cQWIK ERROR  t is not a function TypeError: t is not a function
+  pageerror: t is not a function
+  error: %cQWIK ERROR  t is not a function TypeError: t is not a function
+  pageerror: t is not a function
+Q24b /q24b/ after two clicks: {"button":"2","count":"0"} (expected {"button":"2","count":"2"})
+  error: %cQWIK ERROR  Cannot read properties of undefined (reading '0') TypeError: Cannot read properties of undefined (reading '0')
+Q24b /q24b/inline/ after two clicks: {"button":"2","count":"0"} (expected {"button":"2","count":"2"})
+  no errors
+Q24c after a click: "slow data 1" (expected "slow data 1")
+  no errors
+Q24e {"status":200,"inline500":true}
+Q24f after two clicks: {"button":"3","late":"slow 2"} (expected {"button":"3","late":"slow 6"})
+  no errors
 ```
