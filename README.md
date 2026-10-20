@@ -36,6 +36,7 @@ DEV=1 node verify3.mjs            # the same against `vite --mode ssr` (Q24c and
 | [`/q24c/`](src/routes/q24c/index.tsx) (dev only) | `.pending` of an async signal read inside an out-of-order `<Pending>` | the dev server asserts "Do not use signals across containers" and the response never finishes |
 | [`/q24e/`](src/routes/q24e/index.tsx) (dev only) | a component throws while rendering on the server, no `<Catch>` | the dev server never finishes the response and logs nothing (the build answers with an inline 500) |
 | [`/q24f/`](src/routes/q24f/index.tsx) | a computed signal first read inside a late `<Pending>` | it never updates after resume, no error |
+| [`/w/`](src/routes/w) + `node verify-w.mjs --with-g-v1` | B, C and D clicked 60 ms apart while B and C load (`blockSSR: false`, read while rendering), **with the invalidate-and-recompute fix first proposed for #9237** (`g-v1.patch`) | URL `/w/d/`, page A still on screen, `isNavigating` stays `true` (40/40). Plain rc.3: no hang (0/30), but the #9237 symbol |
 
 `npm run verify` output on 2.0.0-rc.3:
 

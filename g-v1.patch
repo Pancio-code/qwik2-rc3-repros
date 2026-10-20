@@ -1,0 +1,84 @@
+diff --git a/node_modules/@qwik.dev/core/dist/core.mjs b/node_modules/@qwik.dev/core/dist/core.mjs
+--- a/node_modules/@qwik.dev/core/dist/core.mjs
++++ b/node_modules/@qwik.dev/core/dist/core.mjs
+@@ -2055,6 +2055,22 @@ class ComputedSignalImpl extends SignalImpl {
+         super.value = value;
+     }
+     get untrackedValue() {
++        // PATCH (filo, defect G — reports/qwik2-patch-upstream/G-async-abort.md): a computation that
++        // was aborted (AbortError, e.g. the router's abortRouteLoaderNavigation) leaves no value, no
++        // promise and no error, because $setError$ ignores AbortError. Reading then returned the
++        // internal NEEDS_COMPUTATION symbol. Mark the signal invalid so the read recomputes and
++        // suspends on the new promise, as a first read does. A disposed signal (the router prunes
++        // the loaders of the page being left while its components may still re-render once) cannot
++        // compute any more: suspend that read, the component is about to be removed.
++        if (this.$untrackedValue$ === NEEDS_COMPUTATION &&
++            !this.$current$?.$promise$ &&
++            !this.$untrackedError$ &&
++            !(qTest ? isServerPlatform() : isServer)) {
++            if (this.$disposed$) {
++                throw new Promise(() => { });
++            }
++            this.$flags$ |= 1 /* ComputedSignalFlags.INVALID */;
++        }
+         this.$computeIfNeeded$();
+         if (this.$current$?.$promise$) {
+             if (this.$untrackedValue$ === NEEDS_COMPUTATION || (qTest ? isServerPlatform() : isServer)) {
+diff --git a/node_modules/@qwik.dev/core/dist/core.prod.mjs b/node_modules/@qwik.dev/core/dist/core.prod.mjs
+--- a/node_modules/@qwik.dev/core/dist/core.prod.mjs
++++ b/node_modules/@qwik.dev/core/dist/core.prod.mjs
+@@ -1120,6 +1120,15 @@ class gs extends bs {
+         super.value = t;
+     }
+     get untrackedValue() {
++        // PATCH (filo, defect G — reports/qwik2-patch-upstream/G-async-abort.md): same change as in
++        // core.mjs (An = $current$, bn = $promise$, Qt = $untrackedValue$, ps = NEEDS_COMPUTATION,
++        // Jt = $untrackedError$, kn = $disposed$, We = isServer, h = $flags$).
++        if (this.Qt === ps && !this.An?.bn && !this.Jt && !We) {
++            if (this.kn) {
++                throw new Promise(() => {});
++            }
++            this.h |= 1;
++        }
+         this.$();
+         if (this.An?.bn) {
+             if (this.Qt === ps || We) {
+diff --git a/node_modules/@qwik.dev/core/package.json b/node_modules/@qwik.dev/core/package.json
+--- a/node_modules/@qwik.dev/core/package.json
++++ b/node_modules/@qwik.dev/core/package.json
+@@ -42,7 +42,7 @@
+       "import": {
+         "development": "./dist/core.mjs",
+         "production": "./dist/core.prod.mjs",
+-        "min": "./dist/core.min.mjs",
++        "min": "./dist/core.prod.mjs",
+         "default": "./dist/core.prod.mjs"
+       }
+     },
+@@ -55,7 +55,7 @@
+       "import": {
+         "development": "./dist/core.mjs",
+         "production": "./dist/core.prod.mjs",
+-        "min": "./dist/core.min.mjs",
++        "min": "./dist/core.prod.mjs",
+         "default": "./dist/core.prod.mjs"
+       }
+     },
+@@ -64,7 +64,7 @@
+       "import": {
+         "development": "./dist/core.mjs",
+         "production": "./dist/core.prod.mjs",
+-        "min": "./dist/core.min.mjs",
++        "min": "./dist/core.prod.mjs",
+         "default": "./dist/core.prod.mjs"
+       }
+     },
+@@ -73,7 +73,7 @@
+       "import": {
+         "development": "./dist/core.mjs",
+         "production": "./dist/core.prod.mjs",
+-        "min": "./dist/core.min.mjs",
++        "min": "./dist/core.prod.mjs",
+         "default": "./dist/core.mjs"
+       }
+     },
