@@ -15,6 +15,7 @@ npm run verify:optimizer-export   # createOptimizer: declared in the types, miss
 node verify3.mjs                  # out-of-order streaming: Q24, Q24b, Q24c, Q24e, Q24f against the build
 DEV=1 node verify3.mjs            # the same against `vite --mode ssr` (Q24c and Q24e only fail there)
 node verify-x.mjs                 # late out-of-order segments, scenarios from QwikDev/qwik#9258 (DEV=1 for dev)
+node verify-h.mjs                 # /h/ head tags and /lp/ <Link> aria-pressed (npm i -D @axe-core/playwright for axe)
 ```
 
 | Route | Bug | What you see |
@@ -38,6 +39,8 @@ node verify-x.mjs                 # late out-of-order segments, scenarios from Q
 | [`/q24e/`](src/routes/q24e/index.tsx) (dev only) | a component throws while rendering on the server, no `<Catch>` | the dev server never finishes the response and logs nothing (the build answers with an inline 500) |
 | [`/q24f/`](src/routes/q24f/index.tsx) | a computed signal first read inside a late `<Pending>` | it never updates after resume, no error |
 | [`/x1/`](src/routes/x1/index.tsx) … [`/x6/`](src/routes/x6/index.tsx) + `node verify-x.mjs` | a `<Pending>` segment that resolves after the root state was streamed reads shell state: computed (sync and async), two segments sharing an async signal, `.pending`, an object picked in the shell (scenarios from the tests of QwikDev/qwik#9258 and #9259) | on rc.3 and on `main` before #9258: no update after resume, `Cannot read properties of undefined (reading '0')`, `.pending` stays `false` (dev: the response never finishes), the object loses its identity. **Fixed by QwikDev/qwik#9258** |
+| [`/h/`](src/routes/h/index.tsx), [`/h/old/`](src/routes/h/old/index.tsx) + `node verify-h.mjs` | a `head` script or style declared with its attributes on the object (the recommended form; `props` is deprecated) | `DocumentHeadTags` renders the content a second time as an attribute: `<script type="application/ld+json" script="…">`, `<style style="…">`. The deprecated `props` form (`/h/old/`) is fine |
+| [`/lp/`](src/routes/lp/index.tsx) + `node verify-h.mjs` | a `<Link>` client navigation to a slow page | the link carries `aria-pressed="true"` until the navigation ends (axe `aria-allowed-attr`, critical: not allowed on a link); if the navigation fails (offline) it is never removed |
 | [`/w/`](src/routes/w) + `node verify-w.mjs --with-g-v1` | B, C and D clicked 60 ms apart while B and C load (`blockSSR: false`, read while rendering), **with the invalidate-and-recompute fix first proposed for #9237** (`g-v1.patch`) | URL `/w/d/`, page A still on screen, `isNavigating` stays `true` (40/40). Plain rc.3: no hang (0/30), but the #9237 symbol |
 
 `npm run verify` output on 2.0.0-rc.3:
