@@ -1,11 +1,10 @@
 // #9258 "late inline subscriptions when segments share an async signal" (#9250 shape, data resolved after the root state).
 import { component$, isServer, Pending, useComputed$, useSignal, type Signal } from "@qwik.dev/core";
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const Count = component$((props: { count: Signal<number> }) => <span id="count">{props.count.value}</span>);
 const Reader = component$((props: { data: { value: string }; count?: Signal<number> }) => (
   <p>
     {props.data.value}
-    {props.count && (false ? <Count count={props.count} /> : <span id="count">{props.count.value}</span>)}
+    {props.count && <span id="count">{props.count.value}</span>}
   </p>
 ));
 export default component$(() => {
