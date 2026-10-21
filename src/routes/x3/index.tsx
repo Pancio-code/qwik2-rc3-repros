@@ -5,7 +5,7 @@ const Count = component$((props: { count: Signal<number> }) => <span id="count">
 const Reader = component$((props: { data: { value: string }; count?: Signal<number> }) => (
   <p>
     {props.data.value}
-    {props.count && (true ? <Count count={props.count} /> : <span id="count">{props.count.value}</span>)}
+    {props.count && <Count count={props.count} />}
   </p>
 ));
 export default component$(() => {
