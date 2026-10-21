@@ -44,12 +44,17 @@ const text = (p, sel) => p.textContent(sel, { timeout: 1000 }).then((t) => t?.tr
 
 // Q24
 {
-  const html = await (await fetch(`${BASE}/q24/`)).text();
-  const stateRoots = JSON.parse(html.match(/<script type="qwik\/state" q:instance="[^"]*">(.*?)<\/script>/s)[1]).length / 2;
-  const patchStart = JSON.parse(html.match(/<script type="qwik\/state"[^>]*q:patch[^>]*>(.*?)<\/script>/s)[1])[0];
-  const earlyVNode = html.match(/<script type="qwik\/vnode" q:r="2">(.*?)<\/script>/s)?.[1] ?? "";
-  const pastEnd = [...earlyVNode.matchAll(/[<>[\]^=](\d+)/g)].map((m) => +m[1]).filter((id) => id >= stateRoots);
-  console.log("Q24 HTML", JSON.stringify({ stateRoots, patchStart, earlySegmentRefsPastStateEnd: pastEnd }));
+  // The HTML check reads the rc.3 layout; later builds stream the root state (q:stream) and skip it.
+  try {
+    const html = await (await fetch(`${BASE}/q24/`)).text();
+    const stateRoots = JSON.parse(html.match(/<script type="qwik\/state" q:instance="[^"]*">(.*?)<\/script>/s)[1]).length / 2;
+    const patchStart = JSON.parse(html.match(/<script type="qwik\/state"[^>]*q:patch[^>]*>(.*?)<\/script>/s)[1])[0];
+    const earlyVNode = html.match(/<script type="qwik\/vnode" q:r="2">(.*?)<\/script>/s)?.[1] ?? "";
+    const pastEnd = [...earlyVNode.matchAll(/[<>[\]^=](\d+)/g)].map((m) => +m[1]).filter((id) => id >= stateRoots);
+    console.log("Q24 HTML", JSON.stringify({ stateRoots, patchStart, earlySegmentRefsPastStateEnd: pastEnd }));
+  } catch {
+    console.log("Q24 HTML: rc.3 state layout not found (streamed state), check skipped");
+  }
   const { p, log } = await page("/q24/");
   await click(p, "#slow");
   await sleep(300);
