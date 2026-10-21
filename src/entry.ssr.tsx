@@ -1,31 +1,38 @@
-/**
- * WHAT IS THIS FILE?
- *
- * SSR renderer function, used by Qwik Router.
- *
- * Note that this is the only place the Qwik renderer is called.
- * On the client, containers resume and do not call render.
- */
 import { createRenderer } from "@qwik.dev/router";
 import Root from "./root";
 
-export default createRenderer((opts) => {
-  return {
-    jsx: <Root />,
-    options: {
-      ...opts,
-      // Use container attributes to set attributes on the html tag.
-      containerAttributes: {
-        lang: "en-us",
-        ...opts.containerAttributes,
-      },
-      serverData: {
-        ...opts.serverData,
-        // These are the default values for the document head and are overridden by the `head` exports
-        // documentHead: {
-        //   title: "My App",
-        // },
-      },
+export default createRenderer((opts) => ({
+  jsx: <Root />,
+  options: {
+    ...opts,
+    containerAttributes: { lang: "en-us", ...opts.containerAttributes },
+    streaming: {
+      ...opts.streaming,
+      // OOS=0 turns out-of-order streaming off (default: on).
+      outOfOrder: process.env.OOS !== "0",
+      // E_CHUNK=n: ask the auto strategy to hold the first n bytes before the first flush.
+      ...(process.env.E_CHUNK
+        ? {
+            inOrder: {
+              strategy: "auto",
+              maximumInitialChunk: Number(process.env.E_CHUNK),
+            },
+          }
+        : {}),
+      // E_INORDER=disabled: no in-order streaming at all.
+      ...(process.env.E_INORDER === "disabled"
+        ? { inOrder: { strategy: "disabled" } }
+        : {}),
     },
-  };
-});
+    // E_STATUS=1: a <Catch> that caught before the first chunk turns the response into a 500.
+    onBeforeFirstFlush:
+      process.env.E_STATUS === "1"
+        ? (info) => {
+            console.error("[E] onBeforeFirstFlush", JSON.stringify(info));
+            opts.onBeforeFirstFlush?.(info);
+            if (info.hasCaughtError)
+              opts.serverData?.qwikrouter?.ev?.status(500);
+          }
+        : opts.onBeforeFirstFlush,
+  },
+}));
