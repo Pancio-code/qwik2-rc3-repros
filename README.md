@@ -117,9 +117,10 @@ Q24f after two clicks: {"button":"3","late":"slow 2"} (expected {"button":"3","l
   no errors
 ```
 
-On `main` at `1bcd4b47b` (before QwikDev/qwik#9258) `/q24b/` and `/q24f/` no longer fail: the
-resumed state still lacks the subscription patch, but the click updates through another path. The
-`/x*/` routes still fail there and tell the bug from the fix.
+On `main` at `1bcd4b47b` (before QwikDev/qwik#9258), `node verify3.mjs` gives: Q24 fixed (by
+QwikDev/qwik#9254); Q24b, Q24c (dev) and Q24f fail as above. With QwikDev/qwik#9258 (pkg.pr.new build
+`c447c30`), Q24b, Q24c and Q24f pass in build and dev. Q24e still fails in dev: the response never finishes
+(QwikDev/qwik#9252).
 
 `node verify-x.mjs` output (build; `DEV=1` gives the same, except that the two `.pending` rows on rc.3
 and on `main` before #9258 print `LOAD TIMEOUT`), 2.0.0-rc.3 and `main` at `1bcd4b47b`:
