@@ -14,6 +14,7 @@ npm run verify:no-catch-flag      # builds without the catchBoundary flag and re
 npm run verify:optimizer-export   # createOptimizer: declared in the types, missing at runtime
 node verify3.mjs                  # out-of-order streaming: Q24, Q24b, Q24c, Q24e, Q24f against the build
 DEV=1 node verify3.mjs            # the same against `vite --mode ssr` (Q24c and Q24e only fail there)
+node verify-x.mjs                 # late out-of-order segments, scenarios from QwikDev/qwik#9258 (DEV=1 for dev)
 ```
 
 | Route | Bug | What you see |
@@ -36,6 +37,7 @@ DEV=1 node verify3.mjs            # the same against `vite --mode ssr` (Q24c and
 | [`/q24c/`](src/routes/q24c/index.tsx) (dev only) | `.pending` of an async signal read inside an out-of-order `<Pending>` | the dev server asserts "Do not use signals across containers" and the response never finishes |
 | [`/q24e/`](src/routes/q24e/index.tsx) (dev only) | a component throws while rendering on the server, no `<Catch>` | the dev server never finishes the response and logs nothing (the build answers with an inline 500) |
 | [`/q24f/`](src/routes/q24f/index.tsx) | a computed signal first read inside a late `<Pending>` | it never updates after resume, no error |
+| [`/x1/`](src/routes/x1/index.tsx) … [`/x6/`](src/routes/x6/index.tsx) + `node verify-x.mjs` | a `<Pending>` segment that resolves after the root state was streamed reads shell state: computed (sync and async), two segments sharing an async signal, `.pending`, an object picked in the shell (scenarios from the tests of QwikDev/qwik#9258 and #9259) | on rc.3 and on `main` before #9258: no update after resume, `Cannot read properties of undefined (reading '0')`, `.pending` stays `false` (dev: the response never finishes), the object loses its identity. **Fixed by QwikDev/qwik#9258** |
 | [`/w/`](src/routes/w) + `node verify-w.mjs --with-g-v1` | B, C and D clicked 60 ms apart while B and C load (`blockSSR: false`, read while rendering), **with the invalidate-and-recompute fix first proposed for #9237** (`g-v1.patch`) | URL `/w/d/`, page A still on screen, `isNavigating` stays `true` (40/40). Plain rc.3: no hang (0/30), but the #9237 symbol |
 
 `npm run verify` output on 2.0.0-rc.3:
@@ -114,3 +116,25 @@ Q24e {"status":200,"inline500":true}
 Q24f after two clicks: {"button":"3","late":"slow 2"} (expected {"button":"3","late":"slow 6"})
   no errors
 ```
+
+On `main` at `1bcd4b47b` (before QwikDev/qwik#9258) `/q24b/` and `/q24f/` no longer fail: the
+resumed state still lacks the subscription patch, but the click updates through another path. The
+`/x*/` routes still fail there and tell the bug from the fix.
+
+`node verify-x.mjs` output (build; `DEV=1` gives the same, except that the two `.pending` rows on rc.3
+and on `main` before #9258 print `LOAD TIMEOUT`), 2.0.0-rc.3 and `main` at `1bcd4b47b`:
+
+```
+x1 computed late (#9259)     FAIL {"b":"2","late":"slow 2"} expected {"b":"2","late":"slow 4"}
+x2 computed late (#9258)     FAIL {"c":"0"} expected {"c":"2"}
+x2 task track() late         PASS {"t":"1"}
+x3 shared async, child       FAIL {"b":"2","c":"0"} expected {"b":"2","c":"2"}
+    QWIK ERROR  Cannot read properties of undefined (reading '0') TypeError: Cannot read properties of undefined (reading '0')
+x3i shared async, inline     FAIL {"b":"2","c":"0"} expected {"b":"2","c":"2"}
+x4 .pending late (during)    FAIL {"s":"false"} expected {"s":"true"}
+x4 .pending late (after)     PASS {"s":"false"}
+x5 object identity           FAIL {"m":"lost (0)"} expected {"m":"confirmed (1)"}
+x6 async computed late       FAIL {"late":"3"} expected {"late":"6"}
+```
+
+With QwikDev/qwik#9258 (pkg.pr.new build `c447c30`), build and dev: all nine rows `PASS`, no errors.
