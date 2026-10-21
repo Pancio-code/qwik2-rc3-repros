@@ -16,6 +16,8 @@ node verify3.mjs                  # out-of-order streaming: Q24, Q24b, Q24c, Q24
 DEV=1 node verify3.mjs            # the same against `vite --mode ssr` (Q24c and Q24e only fail there)
 node verify-x.mjs                 # late out-of-order segments, scenarios from QwikDev/qwik#9258 (DEV=1 for dev)
 node verify-h.mjs                 # /h/ head tags and /lp/ <Link> aria-pressed (npm i -D @axe-core/playwright for axe)
+node verify-q34.mjs               # Q34 in a late out-of-order segment (OOS=0: in-order streaming, DEV=1: dev server)
+node verify-e.mjs                 # <Catch> during SSR: Cache-Control and onBeforeFirstFlush (flags below)
 ```
 
 | Route | Bug | What you see |
@@ -41,6 +43,8 @@ node verify-h.mjs                 # /h/ head tags and /lp/ <Link> aria-pressed (
 | [`/x1/`](src/routes/x1/index.tsx) … [`/x6/`](src/routes/x6/index.tsx) + `node verify-x.mjs` | a `<Pending>` segment that resolves after the root state was streamed reads shell state: computed (sync and async), two segments sharing an async signal, `.pending`, an object picked in the shell (scenarios from the tests of QwikDev/qwik#9258 and #9259) | on rc.3 and on `main` before #9258: no update after resume, `Cannot read properties of undefined (reading '0')`, `.pending` stays `false` (dev: the response never finishes), the object loses its identity. **Fixed by QwikDev/qwik#9258** |
 | [`/h/`](src/routes/h/index.tsx), [`/h/old/`](src/routes/h/old/index.tsx) + `node verify-h.mjs` | a `head` script or style declared with its attributes on the object (the recommended form; `props` is deprecated) | `DocumentHeadTags` renders the content a second time as an attribute: `<script type="application/ld+json" script="…">`, `<style style="…">`. The deprecated `props` form (`/h/old/`) is fine |
 | [`/lp/`](src/routes/lp/index.tsx) + `node verify-h.mjs` | a `<Link>` client navigation to a slow page | the link carries `aria-pressed="true"` until the navigation ends (axe `aria-allowed-attr`, critical: not allowed on a link); if the navigation fails (offline) it is never removed |
+| [`/q34/`](src/routes/q34/index.tsx), [`/q34-in-order/`](src/routes/q34-in-order/index.tsx), [`/q34-no-fn/`](src/routes/q34-no-fn/index.tsx) + `node verify-q34.mjs` | an inline component inside a late `<Pending>` reads a field of a plain object (whose `render` is a function) in an attribute (QwikDev/qwik#9267) | `QWIK ERROR Code(Q34)` "Cannot serialize function", the router's 500 page appended after the shell, the segment never shows. Fine in-order; `/q34-no-fn/` shows the object reaching the state only with out-of-order streaming. Control: [`/q34-props/`](src/routes/q34-props/index.tsx) (functions as `component$` props) fails in both modes, as documented |
+| [`/e/`](src/routes/e/index.tsx), [`/e-late/`](src/routes/e-late/index.tsx) + `node verify-e.mjs` | a route component throws during SSR inside `<Catch>` (QwikDev/qwik#9268) | HTTP 200 with no `Cache-Control: no-store` (promised by the `Catch` docs); `onBeforeFirstFlush` gets `hasCaughtError: false` because `<html …>` is flushed before the async root body, with every in-order strategy |
 | [`/w/`](src/routes/w) + `node verify-w.mjs --with-g-v1` | B, C and D clicked 60 ms apart while B and C load (`blockSSR: false`, read while rendering), **with the invalidate-and-recompute fix first proposed for #9237** (`g-v1.patch`) | URL `/w/d/`, page A still on screen, `isNavigating` stays `true` (40/40). Plain rc.3: no hang (0/30), but the #9237 symbol |
 
 `npm run verify` output on 2.0.0-rc.3:
@@ -142,3 +146,42 @@ x6 async computed late       FAIL {"late":"3"} expected {"late":"6"}
 ```
 
 With QwikDev/qwik#9258 (pkg.pr.new build `c447c30`), build and dev: all nine rows `PASS`, no errors.
+
+`node verify-q34.mjs` and `OOS=0 node verify-q34.mjs` output on 2.0.0-rc.3 (build; the same on `main` at
+`e63f0b2`). `src/entry.ssr.tsx` reads `OOS=0` to turn out-of-order streaming off; `DEV=1 node verify-q34.mjs /q34/`
+runs the dev server, where the stream is cut instead:
+
+```
+build, out-of-order on
+/q34/          HTTP 200, 500 page appended, state, #late="(missing)"
+    server: QWIK ERROR Code(Q34) https://qwikdev-build-v2.qwik-8nx.pages.dev/docs/errors/#q34
+    browser: QWIK ERROR  Cannot read properties of null (reading 'flags') TypeError: Cannot read properties of null (reading 'flags')
+/q34-in-order/ HTTP 200, state, #late="nameAB"
+/q34-no-fn/    HTTP 200, state, #late="nameAB", column object in state
+build, out-of-order off
+/q34/          HTTP 200, state, #late="nameAB"
+/q34-in-order/ HTTP 200, state, #late="nameAB"
+/q34-no-fn/    HTTP 200, state, #late="nameAB"
+```
+
+`node verify-e.mjs` output on 2.0.0-rc.3 (build; the same in dev and on `main` at `e63f0b2`). `src/entry.ssr.tsx`
+reads the flags: `E_STATUS=1` wraps `onBeforeFirstFlush` (logs its argument, and on `hasCaughtError` sets 500),
+`E_CHUNK=n` sets `maximumInitialChunk`, `E_INORDER=disabled`, `OOS=0`; `E_APP=1` makes the boundary's `onError$`
+log `headersSent`:
+
+```
+build
+/e/      HTTP 200, cache-control=null, fallback="fallback: An error occurred"
+    server: (nothing)
+/e-late/ HTTP 200, cache-control=null, fallback="fallback: An error occurred"
+    server: (nothing)
+build E_STATUS=1 E_CHUNK=100000
+/e/      HTTP 200, cache-control=null, fallback="fallback: An error occurred"
+    server: [E] onBeforeFirstFlush {"hasCaughtError":false}
+build OOS=0 E_STATUS=1 E_INORDER=disabled
+/e/      HTTP 200, cache-control=null, fallback="fallback: An error occurred"
+    server: [E] onBeforeFirstFlush {"hasCaughtError":false}
+build E_APP=1
+/e/      HTTP 200, cache-control=null, fallback="fallback: An error occurred"
+    server: [onError$] headersSent=true
+```
